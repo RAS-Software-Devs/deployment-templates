@@ -37,6 +37,16 @@ resource "aws_cloudwatch_log_group" "ecs" {
   retention_in_days = 14
 }
 
+resource "aws_cloudwatch_log_group" "ecs_user" {
+  name              = "/ecs/${var.task_family_user}"
+  retention_in_days = 14
+}
+
+resource "aws_cloudwatch_log_group" "ecs_rental" {
+  name              = "/ecs/${var.task_family_rental}"
+  retention_in_days = 14
+}
+
 data "aws_iam_policy_document" "ecs_task_execution_assume_role" {
   statement {
     effect = "Allow"
