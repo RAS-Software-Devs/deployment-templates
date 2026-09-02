@@ -41,6 +41,29 @@ jobs:
           echo "---- id_token (decoded) ----"
           echo "$TOKEN" | jq . || true
 
+      - name: STS debug: call AssumeRoleWithWebIdentity
+        shell: bash
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ steps['id-token'].outputs.request_url }}
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ steps['id-token'].outputs.request_token }}
+          AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+        run: |
+          echo "Attempting direct STS AssumeRoleWithWebIdentity call to $AWS_ROLE_ARN"
+          if [ -z "$ACTIONS_ID_TOKEN_REQUEST_URL" ] || [ -z "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ]; then
+            echo "id_token request env not available"
+            exit 0
+          fi
+          TOKEN=$(curl -s -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL")
+          # Token should be the JWT string. Call STS without signing using web identity token.
+          STS_RESP=$(curl -s -X POST "https://sts.amazonaws.com/" \
+            --data-urlencode "Action=AssumeRoleWithWebIdentity" \
+            --data-urlencode "Version=2011-06-15" \
+            --data-urlencode "RoleArn=$AWS_ROLE_ARN" \
+            --data-urlencode "RoleSessionName=gh-debug" \
+            --data-urlencode "WebIdentityToken=$TOKEN")
+          echo "---- STS response ----"
+          echo "$STS_RESP"
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v2
         with:
