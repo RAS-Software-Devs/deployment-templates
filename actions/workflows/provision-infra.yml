@@ -1,0 +1,42 @@
+name: Provision Fargate Infra
+
+on:
+  workflow_dispatch:
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: terraform
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.7
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ inputs.aws_region || 'us-east-2' }}
+
+      - name: Terraform Init
+        working-directory: deployment-templates/fargate-spring-boot/terraform
+        run: terraform init -input=false
+
+      - name: Terraform Apply
+        working-directory: deployment-templates/fargate-spring-boot/terraform
+        env:
+          TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
+          TF_VAR_ecr_repository_user: ${{ secrets.ECR_REPOSITORY_USER }}
+          TF_VAR_ecr_repository_rental: ${{ secrets.ECR_REPOSITORY_RENTAL }}
+          TF_VAR_ecs_cluster_name: ${{ secrets.ECS_CLUSTER }}
+          TF_VAR_task_family_user: ${{ secrets.TASK_FAMILY_USER }}
+          TF_VAR_task_family_rental: ${{ secrets.TASK_FAMILY_RENTAL }}
+        run: terraform apply -auto-approve -input=false
