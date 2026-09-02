@@ -6,9 +6,6 @@ on:
       aws_region:
         required: true
         type: string
-      ecr_registry:
-        required: true
-        type: string
       ecr_repository:
         required: true
         type: string
@@ -24,22 +21,20 @@ on:
       container_name:
         required: true
         type: string
-      execution_role_arn:
-        required: true
-        type: string
-      task_role_arn:
-        required: true
-        type: string
-      db_secret_arn:
-        required: true
-        type: string
-      auth_jwt_secret_arn:
-        required: true
-        type: string
     secrets:
       aws_access_key_id:
         required: true
       aws_secret_access_key:
+        required: true
+      ecr_registry:
+        required: true
+      execution_role_arn:
+        required: true
+      task_role_arn:
+        required: true
+      db_secret_arn:
+        required: true
+      auth_jwt_secret_arn:
         required: true
 
 jobs:
@@ -68,7 +63,7 @@ jobs:
       - name: Build and push image
         run: |
           IMAGE_TAG=${GITHUB_SHA::8}
-          IMAGE_URI=${{ inputs.ecr_registry }}/${{ inputs.ecr_repository }}:${IMAGE_TAG}
+          IMAGE_URI=${{ secrets.ecr_registry }}/${{ inputs.ecr_repository }}:${IMAGE_TAG}
           docker build -t $IMAGE_URI .
           docker push $IMAGE_URI
           echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
@@ -83,10 +78,10 @@ jobs:
             | sed "s|{{AWS_REGION}}|${{ inputs.aws_region }}|g" \
             | sed "s|{{TASK_FAMILY}}|${{ inputs.task_family }}|g" \
             | sed "s|{{CONTAINER_NAME}}|${{ inputs.container_name }}|g" \
-            | sed "s|{{EXECUTION_ROLE_ARN}}|${{ inputs.execution_role_arn }}|g" \
-            | sed "s|{{TASK_ROLE_ARN}}|${{ inputs.task_role_arn }}|g" \
-            | sed "s|{{DB_SECRET_ARN}}|${{ inputs.db_secret_arn }}|g" \
-            | sed "s|{{AUTH_JWT_SECRET_ARN}}|${{ inputs.auth_jwt_secret_arn }}|g")
+            | sed "s|{{EXECUTION_ROLE_ARN}}|${{ secrets.execution_role_arn }}|g" \
+            | sed "s|{{TASK_ROLE_ARN}}|${{ secrets.task_role_arn }}|g" \
+            | sed "s|{{DB_SECRET_ARN}}|${{ secrets.db_secret_arn }}|g" \
+            | sed "s|{{AUTH_JWT_SECRET_ARN}}|${{ secrets.auth_jwt_secret_arn }}|g")
           echo "$TASK_DEF" > /tmp/taskdef.json
           REVISION_ARN=$(aws ecs register-task-definition --cli-input-json file:///tmp/taskdef.json --query 'taskDefinition.taskDefinitionArn' --output text)
           echo "revision_arn=$REVISION_ARN" >> "$GITHUB_OUTPUT"
