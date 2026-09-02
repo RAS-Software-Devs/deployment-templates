@@ -23,6 +23,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: us-east-2
+          role-skip-session-tagging: true
 
       - name: Terraform Init
         working-directory: deployment-templates/fargate-spring-boot/terraform
