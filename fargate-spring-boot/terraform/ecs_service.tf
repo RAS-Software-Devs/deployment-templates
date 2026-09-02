@@ -81,11 +81,12 @@ resource "aws_ecs_task_definition" "user" {
 }
 
 resource "aws_ecs_service" "user" {
-  name            = var.task_family_user
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.user.arn
-  desired_count   = var.desired_count
-  launch_type     = "FARGATE"
+  name                       = var.task_family_user
+  cluster                    = aws_ecs_cluster.main.id
+  task_definition            = aws_ecs_task_definition.user.arn
+  desired_count              = var.desired_count
+  launch_type                = "FARGATE"
+  health_check_grace_period_seconds = 300
   network_configuration {
     subnets         = aws_subnet.public[*].id
     security_groups = [aws_security_group.ecs_sg.id]
@@ -97,6 +98,9 @@ resource "aws_ecs_service" "user" {
     container_port   = 8080
   }
   depends_on = [aws_lb_listener.http]
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
 }
 
 /* Rental service task and service */
@@ -132,11 +136,12 @@ resource "aws_ecs_task_definition" "rental" {
 }
 
 resource "aws_ecs_service" "rental" {
-  name            = var.task_family_rental
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.rental.arn
-  desired_count   = var.desired_count
-  launch_type     = "FARGATE"
+  name                       = var.task_family_rental
+  cluster                    = aws_ecs_cluster.main.id
+  task_definition            = aws_ecs_task_definition.rental.arn
+  desired_count              = var.desired_count
+  launch_type                = "FARGATE"
+  health_check_grace_period_seconds = 300
   network_configuration {
     subnets         = aws_subnet.public[*].id
     security_groups = [aws_security_group.ecs_sg.id]
@@ -148,4 +153,7 @@ resource "aws_ecs_service" "rental" {
     container_port   = 8080
   }
   depends_on = [aws_lb_listener.http]
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
 }
