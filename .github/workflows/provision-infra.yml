@@ -18,51 +18,6 @@ jobs:
         with:
           terraform_version: 1.5.7
 
-      - name: Request OIDC id-token
-        id: id-token
-        uses: actions/oidc-client@v1
-        with:
-          audience: sts.amazonaws.com
-
-      - name: Debug: fetch and show OIDC id_token claims
-        shell: bash
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ steps['id-token'].outputs.request_url }}
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ steps['id-token'].outputs.request_token }}
-        run: |
-          echo "Attempting to fetch id_token claims via OIDC endpoint"
-          if [ -z "$ACTIONS_ID_TOKEN_REQUEST_URL" ] || [ -z "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ]; then
-            echo "id_token request env not available"
-            exit 0
-          fi
-          TOKEN=$(curl -s -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL")
-          echo "---- id_token (raw) ----"
-          echo "$TOKEN"
-          echo "---- id_token (decoded) ----"
-          echo "$TOKEN" | jq . || true
-
-      - name: STS debug: call AssumeRoleWithWebIdentity
-        shell: bash
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ steps['id-token'].outputs.request_url }}
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ steps['id-token'].outputs.request_token }}
-          AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-        run: |
-          echo "Attempting direct STS AssumeRoleWithWebIdentity call to $AWS_ROLE_ARN"
-          if [ -z "$ACTIONS_ID_TOKEN_REQUEST_URL" ] || [ -z "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ]; then
-            echo "id_token request env not available"
-            exit 0
-          fi
-          TOKEN=$(curl -s -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL")
-          STS_RESP=$(curl -s -X POST "https://sts.amazonaws.com/" \
-            --data-urlencode "Action=AssumeRoleWithWebIdentity" \
-            --data-urlencode "Version=2011-06-15" \
-            --data-urlencode "RoleArn=$AWS_ROLE_ARN" \
-            --data-urlencode "RoleSessionName=gh-debug" \
-            --data-urlencode "WebIdentityToken=$TOKEN")
-          echo "---- STS response ----"
-          echo "$STS_RESP"
-
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v2
         with:
