@@ -1,0 +1,16 @@
+name: Call Reusable Fargate Deploy Template
+
+on:
+  workflow_dispatch:
+
+jobs:
+  invoke-template:
+    uses: ./deployment-templates/fargate-spring-boot/fargate-deploy-template.yml
+    with:
+      aws_region: us-east-1
+      ecr_registry: 123456789012.dkr.ecr.us-east-1.amazonaws.com
+      ecr_repository: my-app-repo
+      ecs_cluster: my-app-cluster
+      ecs_service: my-app-service
+      task_family: my-app
+      role_to_assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}

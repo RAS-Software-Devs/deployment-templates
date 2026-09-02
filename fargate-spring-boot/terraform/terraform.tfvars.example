@@ -1,0 +1,4 @@
+aws_region = "us-east-1"
+ecr_repository = "my-app-repo"
+ecs_cluster_name = "my-app-cluster"
+task_family = "my-app"

@@ -1,0 +1,105 @@
+name: Fargate Deploy Template (callable)
+
+on:
+  workflow_call:
+    inputs:
+      aws_region:
+        required: true
+        type: string
+      ecr_registry:
+        required: true
+        type: string
+      ecr_repository:
+        required: true
+        type: string
+      ecs_cluster:
+        required: true
+        type: string
+      ecs_service:
+        required: true
+        type: string
+      task_family:
+        required: true
+        type: string
+      container_name:
+        required: true
+        type: string
+      execution_role_arn:
+        required: true
+        type: string
+      task_role_arn:
+        required: true
+        type: string
+      db_secret_arn:
+        required: true
+        type: string
+      auth_jwt_secret_arn:
+        required: true
+        type: string
+    secrets:
+      aws_access_key_id:
+        required: true
+      aws_secret_access_key:
+        required: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout service repo
+        uses: actions/checkout@v4
+
+      - name: Checkout deployment templates
+        uses: actions/checkout@v4
+        with:
+          repository: RAS-Software-Devs/deployment-templates
+          path: .deploy-templates
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.aws_access_key_id }}
+          aws-secret-access-key: ${{ secrets.aws_secret_access_key }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        run: |
+          IMAGE_TAG=${GITHUB_SHA::8}
+          IMAGE_URI=${{ inputs.ecr_registry }}/${{ inputs.ecr_repository }}:${IMAGE_TAG}
+          docker build -t $IMAGE_URI .
+          docker push $IMAGE_URI
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+
+      - name: Register task definition
+        id: register-task-def
+        run: |
+          set -euo pipefail
+          TASK_DEF=$(cat .deploy-templates/fargate-spring-boot/ecs-task-definition-template.json \
+            | sed "s|{{IMAGE_URI}}|${IMAGE_URI}|g" \
+            | sed "s|{{LOG_GROUP}}|/ecs/${{ inputs.task_family }}|g" \
+            | sed "s|{{AWS_REGION}}|${{ inputs.aws_region }}|g" \
+            | sed "s|{{TASK_FAMILY}}|${{ inputs.task_family }}|g" \
+            | sed "s|{{CONTAINER_NAME}}|${{ inputs.container_name }}|g" \
+            | sed "s|{{EXECUTION_ROLE_ARN}}|${{ inputs.execution_role_arn }}|g" \
+            | sed "s|{{TASK_ROLE_ARN}}|${{ inputs.task_role_arn }}|g" \
+            | sed "s|{{DB_SECRET_ARN}}|${{ inputs.db_secret_arn }}|g" \
+            | sed "s|{{AUTH_JWT_SECRET_ARN}}|${{ inputs.auth_jwt_secret_arn }}|g")
+          echo "$TASK_DEF" > /tmp/taskdef.json
+          REVISION_ARN=$(aws ecs register-task-definition --cli-input-json file:///tmp/taskdef.json --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "revision_arn=$REVISION_ARN" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to ECS service
+        run: |
+          aws ecs update-service \
+            --cluster ${{ inputs.ecs_cluster }} \
+            --service ${{ inputs.ecs_service }} \
+            --task-definition ${{ steps.register-task-def.outputs.revision_arn }} \
+            --force-new-deployment
+
+      - name: Wait for service to stabilize
+        run: |
+          aws ecs wait services-stable --cluster ${{ inputs.ecs_cluster }} --services ${{ inputs.ecs_service }}
+
