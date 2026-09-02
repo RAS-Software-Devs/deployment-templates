@@ -54,7 +54,6 @@ jobs:
             exit 0
           fi
           TOKEN=$(curl -s -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL")
-          # Token should be the JWT string. Call STS without signing using web identity token.
           STS_RESP=$(curl -s -X POST "https://sts.amazonaws.com/" \
             --data-urlencode "Action=AssumeRoleWithWebIdentity" \
             --data-urlencode "Version=2011-06-15" \
@@ -68,7 +67,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ inputs.aws_region || 'us-east-2' }}
+          aws-region: us-east-2
 
       - name: Terraform Init
         working-directory: deployment-templates/fargate-spring-boot/terraform
