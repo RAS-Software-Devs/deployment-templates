@@ -15,11 +15,11 @@ The ALB remains private. Use an SSM remote-host port-forwarding session and call
 
 ## Deploy
 
-Use the `Deploy Shared Staging Infrastructure` workflow in this repository. Supply the existing staging VPC, two private subnets in different availability zones, the shared ALB security group, the ECS task security group, and the SSM test-host security group.
+The `Deploy Shared Staging Infrastructure` workflow validates pull requests that change this directory. After those changes are merged or pushed to `main`, it automatically deploys the `ras-staging-shared-alb` stack. It can also be run manually with `workflow_dispatch` for recovery or reconciliation.
 
 The workflow authenticates to AWS with GitHub OIDC and deploys the `ras-staging-shared-alb` CloudFormation stack. Configure the repository secret `AWS_ROLE_TO_ASSUME` with the ARN of the GitHub Actions role before running it.
 
-For the current staging environment, the workflow inputs are:
+The current staging resource IDs are versioned in `parameters/staging.json`:
 
 | Input | Value |
 | --- | --- |
@@ -30,6 +30,8 @@ For the current staging environment, the workflow inputs are:
 | `ssm_host_security_group_id` | `sg-0dcf98493f3b07a56` |
 
 The workflow prints the private ALB DNS name and both target-group ARNs after a successful deployment.
+
+Changes elsewhere in `deployment-templates` do not redeploy this stack. Add another path-scoped workflow for each independently owned infrastructure stack so unrelated updates cannot mutate staging resources.
 
 ## Ownership
 

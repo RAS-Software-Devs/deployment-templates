@@ -1,28 +1,16 @@
 name: Deploy Shared Staging Infrastructure
 
 on:
+  pull_request:
+    paths:
+      - shared-staging-alb/**
+      - .github/workflows/deploy-shared-staging.yml
+  push:
+    branches: [main]
+    paths:
+      - shared-staging-alb/**
+      - .github/workflows/deploy-shared-staging.yml
   workflow_dispatch:
-    inputs:
-      vpc_id:
-        description: Existing staging VPC ID
-        required: true
-        type: string
-      subnet_ids:
-        description: Comma-separated private subnet IDs in at least two availability zones
-        required: true
-        type: string
-      alb_security_group_id:
-        description: Security group attached to the shared internal ALB
-        required: true
-        type: string
-      ecs_security_group_id:
-        description: Security group attached to the staging ECS tasks
-        required: true
-        type: string
-      ssm_host_security_group_id:
-        description: Security group attached to the SSM test host
-        required: true
-        type: string
 
 concurrency:
   group: shared-staging-infrastructure
@@ -37,8 +25,33 @@ env:
   STACK_NAME: ras-staging-shared-alb
 
 jobs:
-  validate-and-deploy:
-    name: Validate and deploy shared staging stack
+  validate:
+    name: Validate shared staging stack
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate CloudFormation template
+        uses: aws-cloudformation/cfn-lint-action@v2
+        with:
+          args: shared-staging-alb/template.yml
+
+      - name: Validate staging parameters
+        run: |
+          jq -e '
+            has("VpcId") and
+            has("SubnetIds") and
+            has("AlbSecurityGroupId") and
+            has("EcsSecurityGroupId") and
+            has("SsmHostSecurityGroupId") and
+            (.SubnetIds | type == "array" and length >= 2)
+          ' shared-staging-alb/parameters/staging.json >/dev/null
+
+  deploy:
+    name: Deploy shared staging stack
+    if: github.event_name != 'pull_request'
+    needs: validate
     runs-on: ubuntu-latest
     environment: staging
     steps:
@@ -51,14 +64,13 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Validate CloudFormation template
-        run: |
-          aws cloudformation validate-template \
-            --region "$AWS_REGION" \
-            --template-body file://shared-staging-alb/template.yml
-
       - name: Deploy shared staging infrastructure
         run: |
+          mapfile -t PARAMETERS < <(
+            jq -r 'to_entries[] | "\(.key)=\(.value | if type == "array" then join(",") else . end)"' \
+              shared-staging-alb/parameters/staging.json
+          )
+
           aws cloudformation deploy \
             --region "$AWS_REGION" \
             --stack-name "$STACK_NAME" \
@@ -68,12 +80,7 @@ jobs:
               Environment=staging \
               ManagedBy=CloudFormation \
               Repository=RAS-Software-Devs/deployment-templates \
-            --parameter-overrides \
-              VpcId=${{ inputs.vpc_id }} \
-              SubnetIds=${{ inputs.subnet_ids }} \
-              AlbSecurityGroupId=${{ inputs.alb_security_group_id }} \
-              EcsSecurityGroupId=${{ inputs.ecs_security_group_id }} \
-              SsmHostSecurityGroupId=${{ inputs.ssm_host_security_group_id }}
+            --parameter-overrides "${PARAMETERS[@]}"
 
       - name: Publish stack outputs
         run: |

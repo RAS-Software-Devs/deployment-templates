@@ -1,0 +1,10 @@
+{
+  "VpcId": "vpc-096e3083cedfacc7b",
+  "SubnetIds": [
+    "subnet-0f9f0d06b23f50b12",
+    "subnet-047e33d919e05da8f"
+  ],
+  "AlbSecurityGroupId": "sg-0b0717699de878266",
+  "EcsSecurityGroupId": "sg-0830d9c345d38b5f2",
+  "SsmHostSecurityGroupId": "sg-0dcf98493f3b07a56"
+}
