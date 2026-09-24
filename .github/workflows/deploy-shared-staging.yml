@@ -1,0 +1,84 @@
+name: Deploy Shared Staging Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      vpc_id:
+        description: Existing staging VPC ID
+        required: true
+        type: string
+      subnet_ids:
+        description: Comma-separated private subnet IDs in at least two availability zones
+        required: true
+        type: string
+      alb_security_group_id:
+        description: Security group attached to the shared internal ALB
+        required: true
+        type: string
+      ecs_security_group_id:
+        description: Security group attached to the staging ECS tasks
+        required: true
+        type: string
+      ssm_host_security_group_id:
+        description: Security group attached to the SSM test host
+        required: true
+        type: string
+
+concurrency:
+  group: shared-staging-infrastructure
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-2
+  STACK_NAME: ras-staging-shared-alb
+
+jobs:
+  validate-and-deploy:
+    name: Validate and deploy shared staging stack
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate CloudFormation template
+        run: |
+          aws cloudformation validate-template \
+            --region "$AWS_REGION" \
+            --template-body file://shared-staging-alb/template.yml
+
+      - name: Deploy shared staging infrastructure
+        run: |
+          aws cloudformation deploy \
+            --region "$AWS_REGION" \
+            --stack-name "$STACK_NAME" \
+            --template-file shared-staging-alb/template.yml \
+            --no-fail-on-empty-changeset \
+            --tags \
+              Environment=staging \
+              ManagedBy=CloudFormation \
+              Repository=RAS-Software-Devs/deployment-templates \
+            --parameter-overrides \
+              VpcId=${{ inputs.vpc_id }} \
+              SubnetIds=${{ inputs.subnet_ids }} \
+              AlbSecurityGroupId=${{ inputs.alb_security_group_id }} \
+              EcsSecurityGroupId=${{ inputs.ecs_security_group_id }} \
+              SsmHostSecurityGroupId=${{ inputs.ssm_host_security_group_id }}
+
+      - name: Publish stack outputs
+        run: |
+          aws cloudformation describe-stacks \
+            --region "$AWS_REGION" \
+            --stack-name "$STACK_NAME" \
+            --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue]' \
+            --output table | tee -a "$GITHUB_STEP_SUMMARY"

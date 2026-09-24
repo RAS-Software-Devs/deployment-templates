@@ -1,0 +1,151 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Shared internal staging ALB for RAS ECS HTTP services
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+  AlbSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+  EcsSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+  SsmHostSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+
+Resources:
+  SharedAlb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: ras-staging-shared-alb
+      Scheme: internal
+      Type: application
+      SecurityGroups:
+        - !Ref AlbSecurityGroupId
+      Subnets: !Ref SubnetIds
+      Tags:
+        - Key: Name
+          Value: ras-staging-shared-alb
+        - Key: Environment
+          Value: staging
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Repository
+          Value: RAS-Software-Devs/deployment-templates
+
+  AuthTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: ras-stg-auth-tg
+      VpcId: !Ref VpcId
+      Protocol: HTTP
+      Port: 8081
+      TargetType: ip
+      HealthCheckEnabled: true
+      HealthCheckPath: /actuator/health
+      HealthCheckPort: traffic-port
+      Matcher:
+        HttpCode: 200-399
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+
+  RentalTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: ras-stg-rental-tg
+      VpcId: !Ref VpcId
+      Protocol: HTTP
+      Port: 8080
+      TargetType: ip
+      HealthCheckEnabled: true
+      HealthCheckPath: /actuator/health
+      HealthCheckPort: traffic-port
+      Matcher:
+        HttpCode: 200-399
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref SharedAlb
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: fixed-response
+          FixedResponseConfig:
+            StatusCode: '404'
+            ContentType: application/json
+            MessageBody: '{"error":"route not found"}'
+
+  AuthRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HttpListener
+      Priority: 10
+      Conditions:
+        - Field: path-pattern
+          PathPatternConfig:
+            Values:
+              - /auth
+              - /auth/*
+              - /users
+              - /users/*
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref AuthTargetGroup
+
+  RentalRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HttpListener
+      Priority: 20
+      Conditions:
+        - Field: path-pattern
+          PathPatternConfig:
+            Values:
+              - /api
+              - /api/*
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref RentalTargetGroup
+
+  AlbIngressFromSsmHost:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AlbSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !Ref SsmHostSecurityGroupId
+      Description: HTTP from the SSM test host over VPC peering
+
+  AuthIngressFromAlb:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EcsSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 8081
+      ToPort: 8081
+      SourceSecurityGroupId: !Ref AlbSecurityGroupId
+      Description: Authorization traffic from shared ALB
+
+Outputs:
+  AlbArn:
+    Value: !Ref SharedAlb
+    Export:
+      Name: ras-staging-shared-alb-arn
+  AlbDnsName:
+    Value: !GetAtt SharedAlb.DNSName
+    Export:
+      Name: ras-staging-shared-alb-dns-name
+  AuthTargetGroupArn:
+    Value: !Ref AuthTargetGroup
+    Export:
+      Name: ras-staging-auth-target-group-arn
+  RentalTargetGroupArn:
+    Value: !Ref RentalTargetGroup
+    Export:
+      Name: ras-staging-rental-target-group-arn
