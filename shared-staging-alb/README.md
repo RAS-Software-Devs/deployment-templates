@@ -1,15 +1,15 @@
 # Shared staging ALB
 
-This CloudFormation stack owns the common HTTP entry point for staging. It creates one internal Application Load Balancer, listener rules, and one IP target group for each HTTP service.
+This CloudFormation stack owns the common HTTP entry point for staging. It creates one internal Application Load Balancer and its HTTP listener.
 
-Application repositories do not create load balancers, listeners, target groups, VPCs, or shared security-group rules. They build and publish their image, register an application task-definition revision, and update their existing ECS service. When an ECS service is initially provisioned, it attaches to the target-group ARN exported by this stack.
+Application repositories do not create load balancers, listeners, VPCs, or shared access rules. Each service owns its target group, listener rule, ECS configuration, application image, and rollout workflow. Service stacks import the listener ARN exported by this stack.
 
 Routes:
 
 - `/auth`, `/auth/*`, `/users`, and `/users/*` forward to `user-authorization-service` on port 8081.
 - `/api` and `/api/*` forward to `rental-space-service` on port 8080.
 
-Each ECS service has its own IP target group. The stack also permits HTTP access from the SSM-managed test host and authorization traffic from the ALB to the existing ECS task security group.
+The stack permits HTTP access from the SSM-managed test host and shared ALB-to-ECS ingress. Service repositories attach their tasks to the exported shared ECS security group.
 
 The ALB remains private. Use an SSM remote-host port-forwarding session and call `http://localhost:8081` from Bruno.
 
@@ -38,13 +38,13 @@ Changes elsewhere in `deployment-templates` do not redeploy this stack. Add anot
 This stack owns:
 
 - The shared internal staging ALB.
-- The HTTP listener and path-routing rules.
-- The authorization and rental target groups.
-- Shared ingress rules from the test host and ALB.
+- The HTTP listener and default response.
+- Shared ingress from the SSM test host and ALB to ECS tasks.
 
 Each service deployment owns:
 
 - Its ECR image and immutable image tag.
+- Its target group and listener rule.
 - Its ECS task definition and runtime secrets.
 - Updating its ECS service to a new task-definition revision.
 - Its application health and authentication behavior.

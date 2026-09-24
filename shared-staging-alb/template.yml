@@ -33,40 +33,6 @@ Resources:
         - Key: Repository
           Value: RAS-Software-Devs/deployment-templates
 
-  AuthTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: ras-stg-auth-tg
-      VpcId: !Ref VpcId
-      Protocol: HTTP
-      Port: 8081
-      TargetType: ip
-      HealthCheckEnabled: true
-      HealthCheckPath: /actuator/health
-      HealthCheckPort: traffic-port
-      Matcher:
-        HttpCode: 200-399
-      TargetGroupAttributes:
-        - Key: deregistration_delay.timeout_seconds
-          Value: '30'
-
-  RentalTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: ras-stg-rental-tg
-      VpcId: !Ref VpcId
-      Protocol: HTTP
-      Port: 8080
-      TargetType: ip
-      HealthCheckEnabled: true
-      HealthCheckPath: /actuator/health
-      HealthCheckPort: traffic-port
-      Matcher:
-        HttpCode: 200-399
-      TargetGroupAttributes:
-        - Key: deregistration_delay.timeout_seconds
-          Value: '30'
-
   HttpListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -79,38 +45,6 @@ Resources:
             StatusCode: '404'
             ContentType: application/json
             MessageBody: '{"error":"route not found"}'
-
-  AuthRule:
-    Type: AWS::ElasticLoadBalancingV2::ListenerRule
-    Properties:
-      ListenerArn: !Ref HttpListener
-      Priority: 10
-      Conditions:
-        - Field: path-pattern
-          PathPatternConfig:
-            Values:
-              - /auth
-              - /auth/*
-              - /users
-              - /users/*
-      Actions:
-        - Type: forward
-          TargetGroupArn: !Ref AuthTargetGroup
-
-  RentalRule:
-    Type: AWS::ElasticLoadBalancingV2::ListenerRule
-    Properties:
-      ListenerArn: !Ref HttpListener
-      Priority: 20
-      Conditions:
-        - Field: path-pattern
-          PathPatternConfig:
-            Values:
-              - /api
-              - /api/*
-      Actions:
-        - Type: forward
-          TargetGroupArn: !Ref RentalTargetGroup
 
   AlbIngressFromSsmHost:
     Type: AWS::EC2::SecurityGroupIngress
@@ -133,6 +67,22 @@ Resources:
       Description: Authorization traffic from shared ALB
 
 Outputs:
+  VpcId:
+    Value: !Ref VpcId
+    Export:
+      Name: ras-staging-vpc-id
+  SubnetIds:
+    Value: !Join [',', !Ref SubnetIds]
+    Export:
+      Name: ras-staging-private-subnet-ids
+  AlbSecurityGroupId:
+    Value: !Ref AlbSecurityGroupId
+    Export:
+      Name: ras-staging-shared-alb-security-group-id
+  EcsSecurityGroupId:
+    Value: !Ref EcsSecurityGroupId
+    Export:
+      Name: ras-staging-ecs-security-group-id
   AlbArn:
     Value: !Ref SharedAlb
     Export:
@@ -141,11 +91,7 @@ Outputs:
     Value: !GetAtt SharedAlb.DNSName
     Export:
       Name: ras-staging-shared-alb-dns-name
-  AuthTargetGroupArn:
-    Value: !Ref AuthTargetGroup
+  HttpListenerArn:
+    Value: !Ref HttpListener
     Export:
-      Name: ras-staging-auth-target-group-arn
-  RentalTargetGroupArn:
-    Value: !Ref RentalTargetGroup
-    Export:
-      Name: ras-staging-rental-target-group-arn
+      Name: ras-staging-shared-http-listener-arn
