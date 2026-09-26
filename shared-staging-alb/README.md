@@ -13,6 +13,8 @@ The stack permits HTTP access from the SSM-managed test host and shared ALB-to-E
 
 The ALB remains private. Use an SSM remote-host port-forwarding session and call `http://localhost:8081` from Bruno.
 
+For complete macOS and Windows setup, service onboarding, deployment verification, and private staging testing instructions, see the [Service Development and AWS Staging Deployment Guide](../docs/SERVICE_DEPLOYMENT_GUIDE.md).
+
 ## Deploy
 
 The `Deploy Shared Staging Infrastructure` workflow validates pull requests that change this directory. After those changes are merged or pushed to `main`, it automatically deploys the `ras-staging-shared-alb` stack. It can also be run manually with `workflow_dispatch` for recovery or reconciliation.
@@ -29,7 +31,7 @@ The current staging resource IDs are versioned in `parameters/staging.json`:
 | `ecs_security_group_id` | `sg-0830d9c345d38b5f2` |
 | `ssm_host_security_group_id` | `sg-0dcf98493f3b07a56` |
 
-The workflow prints the private ALB DNS name and both target-group ARNs after a successful deployment.
+The workflow prints the shared stack outputs, including the private ALB DNS name and listener ARN, after a successful deployment. Target-group ARNs are outputs of the independently deployed service routing stacks.
 
 Changes elsewhere in `deployment-templates` do not redeploy this stack. Add another path-scoped workflow for each independently owned infrastructure stack so unrelated updates cannot mutate staging resources.
 
